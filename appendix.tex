@@ -1,0 +1,415 @@
+\appendix
+
+\section{Formal architecture and notation}\label{app:model}
+
+We restate the architecture only to fix implementation details. At layer $\ell$, one causal
+attention head maps representations $H_0,\ldots,H_p$ to
+\[
+ q_p=W_QH_p+b_Q,\qquad k_s=W_KH_s+b_K,\qquad v_s=W_VH_s+b_V,
+\]
+then returns the average of $v_s$ over score maximizers of $\langle q_p,k_s\rangle$ for
+$s\leq p$. A multi-head layer sums head outputs, which may occupy disjoint coordinate slots. A
+position-wise constant-depth ReLU network follows attention. Residual connections may preserve
+input slots. Token embeddings are trainable. Positional embeddings are fixed. A decoding matrix
+maps the last representation to vocabulary logits. This is the model of
+\citet[Section~2.1]{yang2026tight}.
+
+The architecture is fixed for each $(g,r)$. Fixing a trainable coordinate to a stated constant means
+restricting the full architecture class to a subclass. This is valid for a VC lower bound. All widths
+between Transformer blocks are bounded by a universal constant. The optional group lookup uses a
+width-$O(g)$ internal FFN layer, which is permitted while keeping the block representation
+dimension constant.
+
+\subsection{Detailed end-to-end upper bound}\label{app:upper}
+
+Let $\Pi_A(n)$ be the largest number of joint next-token patterns that $\mathcal F_A$ realizes on
+any $n$ fixed contexts of length at most $T_{\rm ctx}$. Equation~\eqref{eq:yang-growth} states
+\[
+ \log\Pi_A(n)\leq C_0WL\log(C_1nT_{\rm ctx}WLK).
+ \tag{A.1}
+\]
+Fix $n$ prompts. Partition parameter space by the $n$ tokens emitted on call one. There are at most
+$\Pi_A(n)$ cells. Inside any cell, all prefixes presented on call two are fixed. Intersect that cell
+with the global next-token pattern partition for those prefixes. This creates at most
+$\Pi_A(n)$ subcells. Continuing inductively yields at most $\Pi_A(n)^M$ full-trajectory cells.
+The final-token pattern is fixed on each cell. Hence shattering implies
+\[
+ 2^n\leq\Pi_A(n)^M,
+ \qquad
+ n\leq C_0MWL\log(C_1nT_{\rm ctx}WLK).
+ \tag{A.2}
+\]
+If $n\leq a\log(cn)$ with $a,c\geq2$, then $n\leq C'a\log(C'ac)$. Applying this with
+$a=C_0MWL$ gives Proposition~\ref{prop:upper}.
+
+This recursion is needed because the prefixes at later calls are not fixed globally. It is the same
+reason that applying the one-pass VC bound to only the original prompts would be invalid.
+
+\section{Exact Transformer primitives}\label{app:primitives}
+
+The construction uses four elementary identities.
+
+\begin{lemma}[Binary ReLU gate]\label{lem:gate}
+If $b\in\{0,1\}$ and $x\in[0,C]$, then
+\[
+ bx=\operatorname{ReLU}(x+C(b-1)).
+ \tag{B.1}
+\]
+For $x\in[0,1]$, one may take $C=1$.
+\end{lemma}
+
+\begin{proof}
+For $b=1$ the argument is $x$. For $b=0$ the argument is nonpositive.
+\end{proof}
+
+Thus a token-type bit can gate any bounded fixed positional feature. All bounds are finite because
+$p\leq T_{\rm ctx}-1$. Negative features are represented by positive and negative parts or by an
+affine combination of gated nonnegative features.
+
+\begin{lemma}[Typed average]\label{lem:average}
+Suppose visible positions carry a type flag $u_s\in\{0,1\}$ and value $v_s$, and at least one has
+$u_s=1$. A hard-attention head with constant query one and key $u_s$ returns the average of $v_s$
+over positions with $u_s=1$.
+\end{lemma}
+
+\begin{lemma}[Quadratic address]\label{lem:address}
+For an integer target $q$ and integer positions $p$, the score
+\[
+ 2qp-p^2=q^2-(p-q)^2
+ \tag{B.2}
+\]
+has the unique maximizer $p=q$ whenever that position is visible.
+\end{lemma}
+
+Both lemmas follow directly from the definition of attention. The address is an inner product of
+query $(2q,1)$ and key $(p,-p^2)$.
+
+\begin{lemma}[Binary selector]\label{lem:selector}
+For $u,v,F\in\{0,1\}$,
+\[
+ \operatorname{ReLU}(u-F)+\operatorname{ReLU}(v+F-1)
+ =\begin{cases}u,&F=0,\\v,&F=1.\end{cases}
+ \tag{B.3}
+\]
+\end{lemma}
+
+\section{Full tape construction}\label{app:construction}
+
+Fix $g,r\geq2$ and let $\ell=\lceil\log_2(r+1)\rceil$. The main alphabet is
+\[
+ \{G_1,\ldots,G_g,I_0,I_1,A,S,B_0,B_1,P\}.
+\]
+Token $P$ is used only for optional padding. Prompt $(j,i)$ is
+\[
+ G_j,\ I_{i_0},\ldots,I_{i_{\ell-1}},\ A,\ S,
+ \tag{C.1}
+\]
+where $i=\sum_{q=0}^{\ell-1}i_q2^q$. All prompts have length
+$T=\ell+3$. Positions are zero indexed. Thus the first generated bit occupies position $T$ and
+bit $s$ occupies position $T+s-1$.
+
+We allocate disjoint constant-dimensional coordinate slots. A residual path preserves the slots that
+later blocks need. Since head outputs occupy disjoint slots, describing them separately is
+equivalent to giving the corresponding sparse projection matrices.
+
+\subsection{Embeddings and fixed positional features}
+
+Token embeddings contain the following flags and values:
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+token & group & index & bit type & token bit & fallback & tape value\\
+\midrule
+$G_j$ & 1 & 0 & 0 & 0 & 1 & $\theta_j$\\
+$I_0$ & 0 & 1 & 0 & 0 & 1 & 0\\
+$I_1$ & 0 & 1 & 0 & 1 & 1 & 0\\
+$A$   & 0 & 0 & 0 & 0 & 1 & 0\\
+$S$   & 0 & 0 & 1 & 0 & 0 & 0\\
+$B_0$ & 0 & 0 & 1 & 0 & 0 & 0\\
+$B_1$ & 0 & 0 & 1 & 1 & 0 & 0\\
+$P$   & 0 & 0 & 0 & 0 & 1 & 0\\
+\bottomrule
+\end{tabular}
+\end{center}
+The fallback column is not essential. Every non-bit token has zero comparator key and zero
+comparator value, which is enough.
+
+The fixed positional embedding supplies $1,p,p^2$ at every position. At index position $q+1$ it
+also supplies $2^q$. At positions $p\geq T-1$, it supplies
+\[
+ s(p)=p-T+2,
+ \qquad d(p)=2^{-s(p)},
+ \tag{C.2}
+\]
+and at generated-bit position $p=T+s-1$ it supplies $2^{-s}$. Finally it supplies
+\[
+ F(p)=\1\{p=T+r-1\},
+ \tag{C.3}
+\]
+which is one exactly at the position that is current when the final answer is generated. Values of
+these auxiliary coordinates outside their intended position ranges may be zero.
+
+The label assignment chooses
+\[
+ \theta_j=\sum_{s=1}^rY_{j,s}2^{-s}+2^{-(r+1)}.
+ \tag{C.4}
+\]
+Every other embedding and weight is fixed.
+
+\subsection{Block one: typed features}\label{app:block1}
+
+Set the attention sublayer to the identity through a residual. Its position-wise FFN uses
+Lemma~\ref{lem:gate} to form:
+\begin{align*}
+ &u^{\rm bit},\quad u^{\rm group},\quad u^{\rm index},\\
+ &u^{\rm bit}p,\quad u^{\rm bit}p^2,\quad
+ u^{\rm bit}s(p),\quad u^{\rm bit}2^{-s(p)},\\
+ &v^{\rm prefix}_p
+ =\begin{cases}Y_{j,s}2^{-s},&p=T+s-1,\\0,&\text{otherwise},\end{cases}\\
+ &v^{\rm index}_p
+ =\begin{cases}i_q2^q,&p=q+1,\\0,&\text{otherwise}.
+ \end{cases}
+\end{align*}
+For $v^{\rm prefix}$, equation~\eqref{eq:relu-product} uses the token bit and the fixed dyadic
+feature. For $v^{\rm index}$, use Lemma~\ref{lem:gate} with $C\geq2^{\ell-1}$.
+
+All features are exact on the finite token-position domain. A constant number of ReLU units per
+feature suffices. The width and number of trainable entries are independent of $g$ and $r$.
+
+\subsection{Block two: group, prompt index, and emitted prefix}\label{app:block2}
+
+Three heads apply Lemma~\ref{lem:average}.
+\begin{enumerate}[leftmargin=*]
+ \item The group head scores $u^{\rm group}$ and returns the unique value $\theta_j$.
+ \item The index head scores $u^{\rm index}$ and returns
+ $\ell^{-1}\sum_qi_q2^q=i/\ell$. A fixed affine map in the FFN multiplies by $\ell$.
+ \item The prefix head scores $u^{\rm bit}$. While tape bit $t$ is about to be emitted, the
+ selected positions are $S$ and the preceding $t-1$ bit tokens. Their count is $t$, so its output is
+ \[
+ a_t=\frac1t\sum_{s<t}Y_{j,s}2^{-s}=\frac{P_{t-1}}t.
+ \tag{C.5}
+ \]
+\end{enumerate}
+The FFN preserves $\theta_j,a_t,i,p_*,p_*^2$ in separate slots at the current position. It does not
+form $t a_t$.
+
+\subsection{Block three: next bit and requested bit}\label{app:block3}
+
+At the current position $p_*$, define comparison query
+\[
+ q^{\rm cmp}_{p_*}=(\theta_j,a_t,1,p_*,p_*^2).
+ \tag{C.6}
+\]
+At position $p$, define comparison key
+\[
+ k^{\rm cmp}_p=u^{\rm bit}_p
+ \bigl(1,-s(p),-2^{-s(p)}-2p^2,4p,-2\bigr).
+ \tag{C.7}
+\]
+The dot product is equation~\eqref{eq:comparison-score}. Non-bit positions have key zero and score
+zero. Their comparison value is zero. Bit-type positions have comparison value one.
+
+At tape step $t$, the current bit-type position has $s(p_*)=t$, so by equation~\eqref{eq:tape-decode}
+its score has sign $Y_{j,t}$. For an earlier bit-type position $p<p_*$,
+\[
+ S(p)\leq\theta_j-2(p-p_*)^2<1-2<0,
+ \tag{C.8}
+\]
+where we dropped two nonpositive terms. If $Y_{j,t}=1$, the current position is the unique positive
+maximizer and the head returns one. If $Y_{j,t}=0$, every bit-type score is negative and every
+non-bit position maximizes at zero with value zero. The head returns zero. Call this output $c_t$.
+
+The retrieval head has query
+\[
+ q^{\rm ret}_{p_*}=(2(T+i-1),1)
+\]
+and key $k^{\rm ret}_p=(p,-p^2)$. Its value is the token bit on $B_0,B_1$ and zero on prompt
+tokens. At the final call, all tape positions are visible. Lemma~\ref{lem:address} gives output
+$d=Y_{j,i}$.
+
+The block-three FFN applies Lemma~\ref{lem:selector} with $F(p_*)$:
+\[
+ z=\operatorname{ReLU}(c_t-F(p_*))
+ +\operatorname{ReLU}(d+F(p_*)-1).
+ \tag{C.9}
+\]
+It equals $c_t$ for the first $r$ calls and $d$ on the final call. Decoder logits
+$\operatorname{logit}(B_1)=z-1/2$ and
+$\operatorname{logit}(B_0)=1/2-z$ emit the desired bit. All other logits are fixed below both.
+
+Equations~(C.4)--(C.9) prove by induction that the generated trace is
+\[
+ Y_{j,1},\ldots,Y_{j,r},Y_{j,i}.
+\]
+
+\subsection{Parameter count}\label{app:count}
+
+The hidden dimension, number of heads, and all backbone matrix shapes are constant. The group-token
+embedding table and vocabulary decoder contain $O(g)$ entries. Every other table or matrix has
+$O(g)$ entries only because the vocabulary has $g+O(1)$ rows. Therefore $W(A_{g,r})\leq Cg$.
+The construction uses three attention-FFN blocks and $T=\ell+3=O(\log r)$ prompt positions.
+
+\section{Constant-alphabet compilation}\label{app:constant-alphabet}
+
+Replace $G_j$ by $m=\lceil\log_2g\rceil$ binary prompt tokens. Fixed positional weights and the
+index aggregation of Appendix~\ref{app:block2} recover integer $j\in\{0,\ldots,g-1\}$. Let the
+desired tape scalars be $\theta_0,\ldots,\theta_{g-1}$. Define ReLU hat functions on this integer
+domain by
+\begin{align}
+ \phi_0(x)&=\operatorname{ReLU}(1-x),\nonumber\\
+ \phi_q(x)&=\operatorname{ReLU}(x-q+1)-2\operatorname{ReLU}(x-q)
+ +\operatorname{ReLU}(x-q-1), &&1\leq q\leq g-2,\nonumber\\
+ \phi_{g-1}(x)&=\operatorname{ReLU}(x-g+2)-\operatorname{ReLU}(x-g+1).
+ \tag{D.1}
+\end{align}
+For integer $j,q\in\{0,\ldots,g-1\}$, $\phi_q(j)=\1\{j=q\}$. Therefore
+\[
+ h(j)=\sum_{q=0}^{g-1}\theta_q\phi_q(j)=\theta_j.
+ \tag{D.2}
+\]
+A width-$O(g)$ ReLU FFN computes these hats and writes one scalar output. Crucially, each tape
+scalar $\theta_q$ is one direct output-layer parameter rather than a difference of several tape
+parameters. The network has $O(g)$ parameters and constant input and output dimension.
+
+The alphabet can now be
+\[
+ \{0,1,A,S,B_0,B_1,P\}.
+\]
+Position ranges distinguish the group bits from the requested-index bits. The prompt length becomes
+$O(\log g+\log r)$, and the rest of the construction is unchanged.
+
+\section{Finite trainable precision}\label{app:precision}
+
+For completeness, a $b$-bit coordinate codebook may be different for each parameter. The upper
+bound uses only
+\[
+ |Q_1\times\cdots\times Q_W|\leq2^{bW}.
+ \tag{E.1}
+\]
+For the lower bound, choose $r\leq b-1$ and use the codebook
+\[
+ Q=\left\{\sum_{s=1}^ry_s2^{-s}+2^{-(r+1)}:y\in\{0,1\}^r\right\}.
+ \tag{E.2}
+\]
+It has $2^r\leq2^b$ entries. Each entry has a terminating binary expansion with $r+1$ fractional
+bits. In the constant-alphabet compiler, these values occur directly as the output weights in
+equation~(D.2). Every varying coordinate therefore uses this same $2^r$-element codebook.
+
+If the prescribed rollout length is $M>r+1$, add token $P$. A fixed positional flag emits $P$ on
+calls $r+1,\ldots,M-1$ and selects the retrieval head on call $M$. The tape prefix remains visible,
+so the final answer is unchanged. This establishes Theorem~\ref{thm:precision} for every $M$.
+
+The definition counts selectable trainable values. If every fixed coefficient must also use a
+common signed fixed-point format, the largest values are the index weights $2^q\leq r+1$ and the
+softmax scale from Appendix~\ref{app:softmax}. Their binary descriptions use
+$O(r+\log T_{\rm ctx})$ bits.
+
+\section{Full proof of the supervision gap}\label{app:gap}
+
+The end-to-end map of $\mathcal T_{g,r}$ is exactly
+\[
+ (j,i)\mapsto Y_{j,i},
+ \qquad Y\in\{0,1\}^{g\times r}.
+ \tag{F.1}
+\]
+It is the class of all binary functions on $gr$ points and has VC dimension $gr$. The optimal
+realizable fixed-confidence PAC rate is $\Theta(gr/\epsilon)$
+\citep{hanneke2016optimal}.
+
+For the trace upper bound, let $p_j=\sum_iD(j,i)$. After $n$ samples, memorize $Y_j$ for every
+observed group. On an unseen group, use any default tape. The final-token error is at most
+\[
+ U_n=\sum_{j=1}^gp_j\1\{N_j=0\}.
+\]
+For $x\in[0,1]$, $x(1-x)^n\leq1/(e(n+1))$. Therefore
+\[
+ \E U_n=\sum_jp_j(1-p_j)^n\leq\frac{g}{e(n+1)}.
+ \tag{F.2}
+\]
+At confidence $3/4$, Markov's inequality makes $U_n\leq\epsilon$ once
+$n\geq4g/(e\epsilon)$. Any other fixed confidence changes only the constant.
+
+For the lower bound, restrict equation~(F.1) to tapes
+$Y_{j,1}=\cdots=Y_{j,r}=z_j$. Both the full trace and final answer reveal only arbitrary group bit
+$z_j$. The standard rare-points construction for a $g$-point binary domain requires
+$\Omega(g/\epsilon)$ examples at constant confidence. This proves both sides of
+Theorem~\ref{thm:gap}.
+
+The usual $gr$-point rare-points distribution can be used for the end-to-end lower bound. Since
+equation~(F.2) holds for every distribution, the trace upper bound holds on that same distribution.
+Thus the factor-$\Theta(r)$ comparison does not rely on changing the prompt law between regimes.
+
+The learner is allowed to be improper in both regimes. The separation therefore does not arise
+from a restriction on the training algorithm.
+
+\section{Softmax compilation}\label{app:softmax}
+
+We first give a general finite-domain observation. Suppose a hard-attention head has a maximizer
+set $M(x)$ on input $x$, and every nonmaximizer is below the maximum by at least $\gamma>0$.
+If all value norms are at most $V$ and at most $N$ positions are visible, softmax with inverse
+temperature $\beta$ differs from the uniform average on $M(x)$ by at most
+\[
+ 2VN e^{-\beta\gamma}.
+ \tag{G.1}
+\]
+This follows by bounding the total nonmaximizer mass relative to one maximizing exponential. It
+also applies when the maximizers have different values, as in the prefix-average head.
+
+In the tape construction, group, type, and exact-address heads have constant gaps. The comparison
+head has gap at least
+\[
+ \gamma_{\rm cmp}=2^{-(r+1)}
+ \tag{G.2}
+\]
+between the current score and zero in the positive case, or between zero and every bit score in the
+negative case. Earlier bit positions have an additional gap greater than one. The selector heads
+must approximate $\theta_j$ and $a_t$ accurately enough that the perturbed comparison residual
+retains margin at least $\gamma_{\rm cmp}/2$.
+
+All fixed affine and ReLU maps in three blocks have a finite Lipschitz constant
+$\operatorname{poly}(r,T_{\rm ctx})$ on the relevant bounded states. Choose selector inverse
+temperatures so equation~(G.1) is at most
+$\gamma_{\rm cmp}/\operatorname{poly}(r,T_{\rm ctx})$. It suffices to take
+\[
+ \beta_{\rm sel}=O(r+\log T_{\rm ctx}).
+ \tag{G.3}
+\]
+After this perturbation, take
+\[
+ \beta_{\rm cmp}=2^{O(r)}\operatorname{polylog}(T_{\rm ctx})
+ \tag{G.4}
+\]
+so the comparison output is on the correct side of $1/2$. Constant-gap retrieval needs only
+$O(\log T_{\rm ctx})$ inverse temperature.
+
+Induct on autoregressive calls. If the preceding softmax outputs decode to the correct discrete
+tokens, the current context is exactly the hard construction's context. Equations~(G.1)--(G.4)
+then make the next logit choose the correct token. The base call is identical. Thus all $r+1$
+tokens are preserved for every prompt and every one of the finitely many tape assignments. The
+largest scale in equation~(G.4) has $O(r+\log T_{\rm ctx})$ bits in binary scientific notation.
+
+\section{Executable audits}\label{app:audit}
+
+The supplement contains two dependency-free Python programs.
+
+\paragraph{Exact rational audit.}
+\texttt{audit\_tape.py} uses \texttt{fractions.Fraction}. For every tape through length 14, it
+checks:
+\begin{enumerate}[leftmargin=*]
+ \item sequential recovery by equation~\eqref{eq:tape-decode}
+ \item exact minimum margin $2^{-(r+1)}$
+ \item the full comparison score ordering in equation~\eqref{eq:comparison-score}
+ \item unique quadratic retrieval for every requested coordinate
+ \item the constant-alphabet hat lookup in equations~(D.1) and (D.2).
+\end{enumerate}
+This enumerates $\sum_{r=1}^{14}2^r=32766$ tapes.
+
+\paragraph{Softmax audit.}
+\texttt{audit\_softmax.py} replaces each hard selector, prefix average, comparison, and retrieval
+with stable finite-temperature softmax. It uses explicit scales following equations~(G.3) and
+(G.4), then enumerates every tape and requested coordinate through length 12. All 8190 tapes and
+their rollouts pass.
+
+The programs print one line per tape length and terminate with assertion failures if any identity,
+score ordering, emitted token, or retrieved coordinate is wrong. They are audits of the scalar
+construction rather than a training experiment.
