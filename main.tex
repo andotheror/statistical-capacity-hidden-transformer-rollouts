@@ -33,109 +33,58 @@
 \maketitle
 
 \begin{abstract}
-A Transformer with $W$ parameters is reused at every autoregressive step. Can $M$ hidden
-steps make its final-answer class statistically more complex than one forward pass? Generic
-autoregressive learning theory permits a linear factor in $M$, but it was unknown whether a fixed
-Transformer architecture attains this factor. We give a sharp answer. Every depth-$L$
-hard-attention Transformer has final-token VC dimension at most
-\[
- O\!\left(MWL\log(MT_{\rm ctx}WLK)\right),
-\]
-where $K$ is vocabulary size. Conversely, for every $W$ and $M$, one three-block decoder with
-constant hidden dimension and constant vocabulary has VC dimension $\Omega(WM)$. Its prompt
-has length $O(\log W+\log M)$. The construction stores a binary tape in each trainable scalar,
-emits the tape one bit at a time, then retrieves a prompt-selected bit. It works with ordinary
-softmax attention after finite logit scaling.
+A Transformer with $W$ parameters is reused at every autoregressive step. Can $M$ hidden steps make its final-answer class statistically more complex than one forward pass? Generic autoregressive learning theory permits a linear factor in $M$, but it was unknown whether a fixed Transformer architecture attains this factor. We give a sharp answer. Every depth-$L$ hard-attention Transformer has final-token VC dimension at most \[ O\!\left(MWL\log(MT_{\rm ctx}WLK)\right), \] where $K$ is vocabulary size. Conversely, for every $W$ and $M$, one three-block decoder with constant hidden dimension and constant vocabulary has VC dimension $\Omega(WM)$. Its prompt has length $O(\log W+\log M)$. The construction stores a binary tape in each trainable scalar, emits the tape one bit at a time, then retrieves a prompt-selected bit. It works with ordinary softmax attention after finite logit scaling.
 
-This capacity has a sharp trainable-precision cutoff. If every trainable scalar has at most $b$ bits of
-choice, cardinality gives VC dimension at most $bW$, while the construction gives
-$\Omega(W\min\{M,b\})$. Hence hidden rollouts unlock one selectable label bit per parameter per
-step until trainable precision is exhausted. Finally, for the same fixed Transformer subclass and
-the same prompt distribution, final-answer supervision has realizable sample complexity
-$\Theta(WM/\epsilon)$ at constant confidence, while full-trace supervision needs only
-$\Theta(W/\epsilon)$. This is a factor-$\Theta(M)$ supervision gap, not a comparison between
-different architectures. The results resolve the end-to-end Transformer question left open by the
-sharp single-pass and full-trace theory, and separate the computational power of longer reasoning
-from the statistical information stored in its parameters.
+This capacity has a sharp trainable-precision cutoff. If every trainable scalar has at most $b$ bits of choice, cardinality gives VC dimension at most $bW$, while the construction gives $\Omega(W\min\{M,b\})$. Hence hidden rollouts unlock one selectable label bit per parameter per step until trainable precision is exhausted. Finally, for the same fixed Transformer subclass and the same prompt distribution, final-answer supervision has realizable sample complexity $\Theta(WM/\epsilon)$ at constant confidence, while full-trace supervision needs only $\Theta(W/\epsilon)$. This is a factor-$\Theta(M)$ supervision gap, not a comparison between different architectures. The results resolve the end-to-end Transformer question left open by the sharp single-pass and full-trace theory, and separate the computational power of longer reasoning from the statistical information stored in its parameters.
 \end{abstract}
 
 \section{Introduction}
 
-Autoregressive Transformers reuse one next-token map many times. The intermediate tokens enlarge
-the computation available to a shallow model \citep{merrill2023expressive,li2024serial}, and
-supervising those tokens can change both optimization and generalization
-\citep{kim2025parity,altabaa2025cot}. A separate statistical question is more basic. If training
-reveals only the final answer, how rich is the prompt-to-answer class produced by the rollout?
+Autoregressive Transformers reuse one next-token map many times. The intermediate tokens enlarge the computation available to a shallow model \citep{merrill2023expressive,li2024serial}, and supervising those tokens can change both optimization and generalization \citep{kim2025parity,altabaa2025cot}. A separate statistical question is more basic. If training reveals only the final answer, how rich is the prompt-to-answer class produced by the rollout?
 
-For an arbitrary binary next-token class of VC dimension $d$, $M$ autoregressive applications have
-final-answer VC dimension at most $Md$, and abstract classes attain every natural rate up to this
-linear ceiling \citep{joshi2025theory,hanneke2026sample}. These results do not determine what a
-Transformer can attain. The architecture strongly constrains one forward pass. A depth-$L$
-hard-attention Transformer with $W$ parameters and context length $T$ has VC dimension
-$\widetilde\Theta(WL)$, with only logarithmic dependence on $T$ \citep{yang2026tight}. The same
-work proves a nearly matching, rollout-length-insensitive sample bound when full reasoning traces
-are observed, then asks what happens when intermediate traces are unavailable.
+For an arbitrary binary next-token class of VC dimension $d$, $M$ autoregressive applications have final-answer VC dimension at most $Md$, and abstract classes attain every natural rate up to this linear ceiling \citep{joshi2025theory,hanneke2026sample}. These results do not determine what a Transformer can attain. The architecture strongly constrains one forward pass. A depth-$L$ hard-attention Transformer with $W$ parameters and context length $T$ has VC dimension $\widetilde\Theta(WL)$, with only logarithmic dependence on $T$ \citep{yang2026tight}. The same work proves a nearly matching, rollout-length-insensitive sample bound when full reasoning traces are observed, then asks what happens when intermediate traces are unavailable.
 
-We close this architectural gap. Up to logarithms, a constant-depth Transformer can spend its
-parameter capacity again at every hidden rollout step. The mechanism is a dyadic tape. One
-trainable number
+We close this architectural gap. Up to logarithms, a constant-depth Transformer can spend its parameter capacity again at every hidden rollout step. The mechanism is a dyadic tape. One trainable number
 \begin{equation}
  \theta(y)=\sum_{t=1}^{r}y_t2^{-t}+2^{-(r+1)}
  \label{eq:intro-tape}
 \end{equation}
-stores $r$ arbitrary bits. Repeated calls recover these bits in order. The final call retrieves the
-coordinate requested by the prompt. With $g=\Theta(W)$ tapes, the model shatters all $gr$
-group-coordinate prompts. This yields $\Omega(WM)$ final-token VC dimension for $M=r+1$ calls.
-The construction uses three Transformer blocks, constant hidden dimension, and either $g+O(1)$
-tokens or a constant-alphabet compilation with binary group identifiers.
+stores $r$ arbitrary bits. Repeated calls recover these bits in order. The final call retrieves the coordinate requested by the prompt. With $g=\Theta(W)$ tapes, the model shatters all $gr$ group-coordinate prompts. This yields $\Omega(WM)$ final-token VC dimension for $M=r+1$ calls. The construction uses three Transformer blocks, constant hidden dimension, and either $g+O(1)$ tokens or a constant-alphabet compilation with binary group identifiers.
 
-Packing bits into real parameters is a familiar source of capacity in deep networks
-\citep{bartlett2019nearly}. Here it has a different interpretation. Depth is fixed, while the same
-weights are queried through an expanding discrete transcript. This makes trainable precision the
-right accounting variable. If one scalar has only $b$ bits of choice, it cannot select more than
-$b$ independent labels. We prove that this elementary cardinality obstruction is attainable along
-the rollout axis:
+Packing bits into real parameters is a familiar source of capacity in deep networks \citep{bartlett2019nearly}. Here it has a different interpretation. Depth is fixed, while the same weights are queried through an expanding discrete transcript. This makes trainable precision the right accounting variable. If one scalar has only $b$ bits of choice, it cannot select more than $b$ independent labels. We prove that this elementary cardinality obstruction is attainable along the rollout axis:
 \begin{equation}
  \VC=\widetilde\Theta\!\left(W\min\{M,b\}\right)
  \qquad\text{for constant depth.}
  \label{eq:intro-frontier}
 \end{equation}
-Longer generation can still add computational power at constant precision
-\citep{li2024serial}. Equation~\eqref{eq:intro-frontier} says that it cannot add indefinitely many
-statistically selectable label bits without parameter information to select them.
+Longer generation can still add computational power at constant precision \citep{li2024serial}. Equation~\eqref{eq:intro-frontier} says that it cannot add indefinitely many statistically selectable label bits without parameter information to select them.
 
-The tape also isolates the value of trace supervision. On prompt $(j,i)$, the hidden trace emits
-the whole group tape $y_j$ before returning $y_{j,i}$. A final-answer example reveals one bit. A
-full-trace example reveals all $r$ bits for that group. End-to-end learning is ordinary learning of
-all binary functions on $gr$ points. Trace learning is missing-mass estimation on only $g$ groups.
-At fixed confidence the respective minimax sample complexities are
+The tape also isolates the value of trace supervision. On prompt $(j,i)$, the hidden trace emits the whole group tape $y_j$ before returning $y_{j,i}$. A final-answer example reveals one bit. A full-trace example reveals all $r$ bits for that group. End-to-end learning is ordinary learning of all binary functions on $gr$ points. Trace learning is missing-mass estimation on only $g$ groups. At fixed confidence the respective minimax sample complexities are
 \begin{equation}
  \Theta(gr/\epsilon)
  \quad\text{and}\quad
  \Theta(g/\epsilon).
  \label{eq:intro-gap}
 \end{equation}
-Unlike generic existential separations, both sides use the same prompts, parameters, architecture,
-and inference rule.
+Unlike generic existential separations, both sides use the same prompts, parameters, architecture, and inference rule.
 
 \paragraph{Contributions.}
 Our results give:
 \begin{itemize}[leftmargin=*,itemsep=2pt,topsep=2pt]
  \item an end-to-end upper bound $O(MWL\log(MT_{\rm ctx}WLK))$ for every fixed
- hard-attention Transformer architecture
+hard-attention Transformer architecture
  \item an explicit three-block lower bound $\Omega(WM)$, including a constant-alphabet version
- and a softmax compilation
+and a softmax compilation
  \item a matching trainable-precision cutoff $\Omega(W\min\{M,b\})\leq
- \VC\leq bW$
+\VC\leq bW$
  \item a factor-$\Theta(M)$ sample-complexity gap between final-answer and full-trace supervision
- for the same Transformer subclass.
+for the same Transformer subclass.
 \end{itemize}
 All scalar identities and attention competitions are independently executable in the supplement.
 
 \begin{table}[t]
 \centering
-\small
-\setlength{\tabcolsep}{5pt}
+\small \setlength{\tabcolsep}{5pt}
 \begin{tabular}{lll}
 \toprule
 Regime & Statistical complexity & Result\\
@@ -154,68 +103,31 @@ and accuracy. The lower bounds in the last three rows use three Transformer bloc
 
 \section{Setting and prior bounds}
 
-We follow the decoder-only model of \citet{yang2026tight}. A vocabulary $\Sigma$ has size $K$.
-A fixed architecture $A$ has $L$ attention-FFN blocks, $W$ trainable real parameters, causal
-attention, constant-depth ReLU FFNs, residual connections, fixed positional embeddings, and an
-argmax token decoder. Hard attention averages the values at all score-maximizing positions. This
-tie convention is useful for averaging a selected prefix. The positional embedding may be any
-fixed map on positions $0,\ldots,T_{\rm ctx}-1$ and is not counted in $W$. These are exactly the
-conventions under which the sharp one-pass bound is known. Appendix~\ref{app:model} gives the
-maps explicitly.
+We follow the decoder-only model of \citet{yang2026tight}. A vocabulary $\Sigma$ has size $K$. A fixed architecture $A$ has $L$ attention-FFN blocks, $W$ trainable real parameters, causal attention, constant-depth ReLU FFNs, residual connections, fixed positional embeddings, and an argmax token decoder. Hard attention averages the values at all score-maximizing positions. This tie convention is useful for averaging a selected prefix. The positional embedding may be any fixed map on positions $0,\ldots,T_{\rm ctx}-1$ and is not counted in $W$. These are exactly the conventions under which the sharp one-pass bound is known. Appendix~\ref{app:model} gives the maps explicitly.
 
-For a next-token generator $f_\theta:\Sigma^*\to\Sigma$, write
-$f_\theta^{(M)}(x)$ for the prompt followed by $M$ greedy autoregressive tokens. We fix two answer
-tokens $B_0,B_1$ and define
-\[
- \EtoE_M(\mathcal F_A)
- =\left\{x\mapsto \1\{f_\theta^{(M)}(x)[-1]=B_1\}:\theta\in\R^W\right\}.
-\]
-The prompt length is $T$, and $T_{\rm ctx}=T+M$.
+For a next-token generator $f_\theta:\Sigma^*\to\Sigma$, write $f_\theta^{(M)}(x)$ for the prompt followed by $M$ greedy autoregressive tokens. We fix two answer tokens $B_0,B_1$ and define \[ \EtoE_M(\mathcal F_A) =\left\{x\mapsto \1\{f_\theta^{(M)}(x)[-1]=B_1\}:\theta\in\R^W\right\}. \] The prompt length is $T$, and $T_{\rm ctx}=T+M$.
 
-Our finite-precision statement concerns trainable information rather than arithmetic rounding.
-For coordinate codebooks $Q_i\subset\R$ with $|Q_i|\leq2^b$, let
-$\mathcal F_{A,Q}$ restrict parameter $i$ to $Q_i$. We call this a $b$-bit trainable class. The
-fixed coefficients in our construction have binary descriptions of length $O(M+\log T_{\rm
-ctx})$. Thus the lower bound is also compatible with ordinary fixed-point storage once $b$ is of
-that order.
+Our finite-precision statement concerns trainable information rather than arithmetic rounding. For coordinate codebooks $Q_i\subset\R$ with $|Q_i|\leq2^b$, let $\mathcal F_{A,Q}$ restrict parameter $i$ to $Q_i$. We call this a $b$-bit trainable class. The fixed coefficients in our construction have binary descriptions of length $O(M+\log T_{\rm ctx})$. Thus the lower bound is also compatible with ordinary fixed-point storage once $b$ is of that order.
 
-Two prior statements frame the problem. For a fixed binary next-token class $\mathcal F$,
-\citet{joshi2025theory} prove
+Two prior statements frame the problem. For a fixed binary next-token class $\mathcal F$, \citet{joshi2025theory} prove
 \begin{equation}
  \VC(\EtoE_M(\mathcal F))\leq M\VC(\mathcal F).
  \label{eq:generic-upper}
 \end{equation}
-For a fixed hard-attention Transformer architecture, \citet{yang2026tight} prove the multiclass
-growth bound
+For a fixed hard-attention Transformer architecture, \citet{yang2026tight} prove the multiclass growth bound
 \begin{equation}
  \log \Pi_{\mathcal F_A}(n)
  \leq C_0WL\log(C_1nT_{\rm ctx}WLK),
  \label{eq:yang-growth}
 \end{equation}
-where the $n$ contexts are arbitrary but fixed. The next proposition handles the fact that rollout
-contexts themselves depend on the parameters.
+where the $n$ contexts are arbitrary but fixed. The next proposition handles the fact that rollout contexts themselves depend on the parameters.
 
 \begin{proposition}[End-to-end rollout upper bound]\label{prop:upper}
-For every fixed hard-attention architecture $A$ as above,
-\[
- \VC(\EtoE_M(\mathcal F_A))
- \leq CMWL\log(CMT_{\rm ctx}WLK).
-\]
-If the parameters have $b$ bits of choice each, the right side can be replaced by its minimum with
-$bW$.
+For every fixed hard-attention architecture $A$ as above, \[ \VC(\EtoE_M(\mathcal F_A)) \leq CMWL\log(CMT_{\rm ctx}WLK). \] If the parameters have $b$ bits of choice each, the right side can be replaced by its minimum with $bW$.
 \end{proposition}
 
 \begin{proof}
-Fix $n$ prompts. At the first step, equation~\eqref{eq:yang-growth} bounds the number of joint
-next-token patterns. Within any resulting pattern, all $n$ prefixes for step two are fixed, so the
-same bound applies again. Recursing for $M$ steps gives at most
-$\Pi_{\mathcal F_A}(n)^M$ complete trajectory patterns, and hence at most that many final-answer
-patterns. Shattering implies
-\[
- n\leq C_0MWL\log(C_1nT_{\rm ctx}WLK).
-\]
-The standard inversion of $n\leq a\log n+c$ gives the claim. A $b$-bit class contains at most
-$2^{bW}$ parameter vectors, so its VC dimension is at most $bW$.
+Fix $n$ prompts. At the first step, equation~\eqref{eq:yang-growth} bounds the number of joint next-token patterns. Within any resulting pattern, all $n$ prefixes for step two are fixed, so the same bound applies again. Recursing for $M$ steps gives at most $\Pi_{\mathcal F_A}(n)^M$ complete trajectory patterns, and hence at most that many final-answer patterns. Shattering implies \[ n\leq C_0MWL\log(C_1nT_{\rm ctx}WLK). \] The standard inversion of $n\leq a\log n+c$ gives the claim. A $b$-bit class contains at most $2^{bW}$ parameter vectors, so its VC dimension is at most $bW$.
 \end{proof}
 
 \section{One parameter becomes a rollout tape}
@@ -223,8 +135,7 @@ $2^{bW}$ parameter vectors, so its VC dimension is at most $bW$.
 The lower bound begins with an exact scalar decoder.
 
 \begin{lemma}[Dyadic tape]\label{lem:tape}
-For $y\in\{0,1\}^r$, define $\theta(y)$ by equation~\eqref{eq:intro-tape}. If the first $t-1$
-bits are known, let $P_{t-1}=\sum_{s<t}y_s2^{-s}$. Then
+For $y\in\{0,1\}^r$, define $\theta(y)$ by equation~\eqref{eq:intro-tape}. If the first $t-1$ bits are known, let $P_{t-1}=\sum_{s<t}y_s2^{-s}$. Then
 \begin{equation}
  y_t=\1\{\theta(y)-P_{t-1}-2^{-t}>0\},
  \qquad
@@ -234,100 +145,61 @@ bits are known, let $P_{t-1}=\sum_{s<t}y_s2^{-s}$. Then
 \end{lemma}
 
 \begin{proof}
-If $y_t=1$, canceling $2^{-t}$ leaves the nonnegative later-bit tail and the positive midpoint. If
-$y_t=0$, even setting every later bit to one gives a tail smaller than $2^{-t}$ by the midpoint
-$2^{-(r+1)}$. The extremal tapes give equality in the margin bound.
+If $y_t=1$, canceling $2^{-t}$ leaves the nonnegative later-bit tail and the positive midpoint. If $y_t=0$, even setting every later bit to one gives a tail smaller than $2^{-t}$ by the midpoint $2^{-(r+1)}$. The extremal tapes give equality in the margin bound.
 \end{proof}
 
-The key question is whether a Transformer can maintain $P_{t-1}$ without multiplying two
-hidden-state coordinates. It can. Give the $s$th emitted bit the fixed positional value $2^{-s}$.
-A pointwise ReLU gate forms
+The key question is whether a Transformer can maintain $P_{t-1}$ without multiplying two hidden-state coordinates. It can. Give the $s$th emitted bit the fixed positional value $2^{-s}$. A pointwise ReLU gate forms
 \begin{equation}
  y_s2^{-s}=\operatorname{ReLU}(2^{-s}+y_s-1).
  \label{eq:relu-product}
 \end{equation}
-At step $t$, one average-hard head selects \textsc{start} and the $t-1$ preceding bit tokens. Its
-value is $a_t=P_{t-1}/t$. The factor $t$ appears only as a key coefficient inside the next
-bilinear attention score. No FFN multiplies $t$ by $a_t$.
+At step $t$, one average-hard head selects \textsc{start} and the $t-1$ preceding bit tokens. Its value is $a_t=P_{t-1}/t$. The factor $t$ appears only as a key coefficient inside the next bilinear attention score. No FFN multiplies $t$ by $a_t$.
 
 \begin{theorem}[Transformer rollout capacity]\label{thm:lower}
-There is a universal constant $C$ such that for every $g,r\geq2$, a fixed three-block causal
-hard-attention Transformer $A_{g,r}$ has
-\[
- W(A_{g,r})\leq Cg,\qquad K\leq g+C,\qquad T=O(\log r),
-\]
-and
+There is a universal constant $C$ such that for every $g,r\geq2$, a fixed three-block causal hard-attention Transformer $A_{g,r}$ has \[ W(A_{g,r})\leq Cg,\qquad K\leq g+C,\qquad T=O(\log r), \] and
 \begin{equation}
  \VC(\EtoE_{r+1}(\mathcal F_{A_{g,r}}))\geq gr.
  \label{eq:main-lower}
 \end{equation}
-There is also a constant-vocabulary architecture with the same parameter order and prompt length
-$O(\log g+\log r)$.
+There is also a constant-vocabulary architecture with the same parameter order and prompt length $O(\log g+\log r)$.
 \end{theorem}
 
 \paragraph{Prompt and target.}
-The $gr$ prompts are indexed by $(j,i)\in[g]\times[r]$. The main construction uses a group
-token $G_j$, a binary encoding of $i$, a zero-valued fallback token, and \textsc{start}. Given
-arbitrary desired labels $Y_{j,i}$, parameter $\theta_j$ stores tape
-$y_j=(Y_{j,1},\ldots,Y_{j,r})$. The desired rollout is
+The $gr$ prompts are indexed by $(j,i)\in[g]\times[r]$. The main construction uses a group token $G_j$, a binary encoding of $i$, a zero-valued fallback token, and \textsc{start}. Given arbitrary desired labels $Y_{j,i}$, parameter $\theta_j$ stores tape $y_j=(Y_{j,1},\ldots,Y_{j,r})$. The desired rollout is
 \begin{equation}
  y_{j,1},\ldots,y_{j,r},y_{j,i}.
  \label{eq:desired-rollout}
 \end{equation}
 
 \paragraph{Three blocks.}
-Block one forms typed positional features such as equation~\eqref{eq:relu-product}. Block two
-uses separate heads to read the unique group scalar $\theta_j$, recover index $i$ from its prompt
-bits, and compute $a_t=P_{t-1}/t$. Consider the current last position $p_*$ while bit $t$ is being
-generated. For a previous bit-type position $p$, including \textsc{start}, let $s(p)$ be the bit
-index that would be generated if $p$ were current. A block-three comparison head has score
+Block one forms typed positional features such as equation~\eqref{eq:relu-product}. Block two uses separate heads to read the unique group scalar $\theta_j$, recover index $i$ from its prompt bits, and compute $a_t=P_{t-1}/t$. Consider the current last position $p_*$ while bit $t$ is being generated. For a previous bit-type position $p$, including \textsc{start}, let $s(p)$ be the bit index that would be generated if $p$ were current. A block-three comparison head has score
 \begin{equation}
  S(p)=\theta_j-s(p)a_t-2^{-s(p)}-2(p-p_*)^2.
  \label{eq:comparison-score}
 \end{equation}
-This is one query-key inner product. The query coordinates are
-$(\theta_j,a_t,1,p_*,p_*^2)$, and the key contains the corresponding type-gated coefficients.
-Every non-bit key has score zero. At $p=p_*$, equation~\eqref{eq:comparison-score} is precisely
-the residual in Lemma~\ref{lem:tape}. Every earlier bit position has score below $1-2<0$.
-Consequently, the head returns one exactly when $y_{j,t}=1$, and otherwise averages zero-valued
-fallbacks.
+This is one query-key inner product. The query coordinates are $(\theta_j,a_t,1,p_*,p_*^2)$, and the key contains the corresponding type-gated coefficients. Every non-bit key has score zero. At $p=p_*$, equation~\eqref{eq:comparison-score} is precisely the residual in Lemma~\ref{lem:tape}. Every earlier bit position has score below $1-2<0$. Consequently, the head returns one exactly when $y_{j,t}=1$, and otherwise averages zero-valued fallbacks.
 
-On the last call, a second head addresses generated position $T+i-1$. Its score at absolute
-position $p$ is
+On the last call, a second head addresses generated position $T+i-1$. Its score at absolute position $p$ is
 \begin{equation}
  2(T+i-1)p-p^2=(T+i-1)^2-(p-(T+i-1))^2,
  \label{eq:address-score}
 \end{equation}
-so the requested tape coordinate is the unique maximizer. A fixed final-position flag gates
-between comparison and retrieval. Appendix~\ref{app:construction} gives every typed feature,
-head, and gate.
+so the requested tape coordinate is the unique maximizer. A fixed final-position flag gates between comparison and retrieval. Appendix~\ref{app:construction} gives every typed feature, head, and gate.
 
-Only the $g$ tape scalars depend on $Y$. The token table, decoding table, and constant-dimensional
-backbone contain $O(g)$ parameters in total. Thus every labeling of the $gr$ prompts is realized,
-which proves equation~\eqref{eq:main-lower}. To remove the growing vocabulary, encode $j$ in
-binary and use width-$O(g)$ ReLU hats that equal the coordinate basis on the $g$ integer
-identifiers. The $g$ tape scalars are direct output weights, and the compiler still uses $O(g)$
-parameters. The exact formula is in Appendix~\ref{app:constant-alphabet}.
+Only the $g$ tape scalars depend on $Y$. The token table, decoding table, and constant-dimensional backbone contain $O(g)$ parameters in total. Thus every labeling of the $gr$ prompts is realized, which proves equation~\eqref{eq:main-lower}. To remove the growing vocabulary, encode $j$ in binary and use width-$O(g)$ ReLU hats that equal the coordinate basis on the $g$ integer identifiers. The $g$ tape scalars are direct output weights, and the compiler still uses $O(g)$ parameters. The exact formula is in Appendix~\ref{app:constant-alphabet}.
 
 Choosing $g=\Theta(W)$ and $r=M-1$ gives the promised architectural lower bound.
 
 \begin{corollary}[Sharp constant-depth scaling]\label{cor:sharp}
-For all sufficiently large $W,M$, some three-block, constant-vocabulary architecture with at most
-$W$ parameters satisfies
-\[
- \VC(\EtoE_M(\mathcal F_A))\geq cWM.
-\]
-Together with Proposition~\ref{prop:upper}, this is sharp in $W$ and $M$ up to logarithms.
+For all sufficiently large $W,M$, some three-block, constant-vocabulary architecture with at most $W$ parameters satisfies \[ \VC(\EtoE_M(\mathcal F_A))\geq cWM. \] Together with Proposition~\ref{prop:upper}, this is sharp in $W$ and $M$ up to logarithms.
 \end{corollary}
 
 \section{The precision frontier}
 
-The comparison margin in Lemma~\ref{lem:tape} is exponentially small for a reason. Selecting one
-of $2^r$ tapes requires $r$ trainable bits. This yields a matching cutoff.
+The comparison margin in Lemma~\ref{lem:tape} is exponentially small for a reason. Selecting one of $2^r$ tapes requires $r$ trainable bits. This yields a matching cutoff.
 
 \begin{theorem}[Rollout-precision frontier]\label{thm:precision}
-Let $b,M\geq3$. For every sufficiently large $W$, there is a three-block constant-vocabulary
-architecture and coordinate codebooks of size at most $2^b$ such that
+Let $b,M\geq3$. For every sufficiently large $W$, there is a three-block constant-vocabulary architecture and coordinate codebooks of size at most $2^b$ such that
 \begin{equation}
  \VC(\EtoE_M(\mathcal F_{A,Q}))
  \geq cW\min\{M,b\}.
@@ -338,38 +210,23 @@ Every $b$-bit trainable architecture, at every depth, obeys
  \VC(\EtoE_M(\mathcal F_{A,Q}))\leq bW.
  \label{eq:precision-upper}
 \end{equation}
-The dyadic construction and all of its fixed coefficients have binary descriptions of length
-$O(\min\{M,b\}+\log T_{\rm ctx})$.
+The dyadic construction and all of its fixed coefficients have binary descriptions of length $O(\min\{M,b\}+\log T_{\rm ctx})$.
 \end{theorem}
 
 \begin{proof}
-Equation~\eqref{eq:precision-upper} is the cardinality argument in
-Proposition~\ref{prop:upper}. For the lower bound, set
-$r=\min\{M-1,b-1\}$. Each tape scalar ranges over the $2^r$ dyadic values in
-Lemma~\ref{lem:tape}. If $r<M-1$, the decoder emits fixed padding after the tape and performs the
-same retrieval on the last call. The $gr$ prompts remain shattered. All dyadic values use $r+1$
-fractional bits. Choosing $g=\Theta(W)$ proves the claim.
+Equation~\eqref{eq:precision-upper} is the cardinality argument in Proposition~\ref{prop:upper}. For the lower bound, set $r=\min\{M-1,b-1\}$. Each tape scalar ranges over the $2^r$ dyadic values in Lemma~\ref{lem:tape}. If $r<M-1$, the decoder emits fixed padding after the tape and performs the same retrieval on the last call. The $gr$ prompts remain shattered. All dyadic values use $r+1$ fractional bits. Choosing $g=\Theta(W)$ proves the claim.
 \end{proof}
 
-This theorem distinguishes information from computation. A constant-precision Transformer can
-use a long chain to execute a long Boolean circuit \citep{li2024serial}. It cannot, however, use
-the same fixed $bW$ trainable bits to choose arbitrary labels on more than $bW$ prompts. Rollout
-length exposes stored distinctions. It does not create parameter information.
+This theorem distinguishes information from computation. A constant-precision Transformer can use a long chain to execute a long Boolean circuit \citep{li2024serial}. It cannot, however, use the same fixed $bW$ trainable bits to choose arbitrary labels on more than $bW$ prompts. Rollout length exposes stored distinctions. It does not create parameter information.
 
 \section{The same-model value of full traces}
 
-Let $\mathcal T_{g,r}$ be the tape subclass in Theorem~\ref{thm:lower}, restricted to the prompt
-domain $[g]\times[r]$. Only its $g$ tape scalars vary. The inference trace on $(j,i)$ is the entire
-tape followed by the selected coordinate, as in equation~\eqref{eq:desired-rollout}.
+Let $\mathcal T_{g,r}$ be the tape subclass in Theorem~\ref{thm:lower}, restricted to the prompt domain $[g]\times[r]$. Only its $g$ tape scalars vary. The inference trace on $(j,i)$ is the entire tape followed by the selected coordinate, as in equation~\eqref{eq:desired-rollout}.
 
-Training examples come from an arbitrary distribution $D$ on $[g]\times[r]$. In the end-to-end
-regime, an example reveals only $y_{j,i}$. In the trace regime, it reveals all $r+1$ generated
-tokens. Evaluation always uses zero-one error on the final token. Let $m_{\rm e2e}$ and
-$m_{\rm trace}$ denote optimal realizable PAC sample complexities, allowing improper learners.
+Training examples come from an arbitrary distribution $D$ on $[g]\times[r]$. In the end-to-end regime, an example reveals only $y_{j,i}$. In the trace regime, it reveals all $r+1$ generated tokens. Evaluation always uses zero-one error on the final token. Let $m_{\rm e2e}$ and $m_{\rm trace}$ denote optimal realizable PAC sample complexities, allowing improper learners.
 
 \begin{theorem}[Exact supervision gap]\label{thm:gap}
-There are universal constants $c,C$ and a fixed confidence $\delta_0>0$ such that for all
-$g,r\geq2$ and $0<\epsilon<c$,
+There are universal constants $c,C$ and a fixed confidence $\delta_0>0$ such that for all $g,r\geq2$ and $0<\epsilon<c$,
 \begin{equation}
  c\frac{gr}{\epsilon}
  \leq m_{\rm e2e}(\epsilon,\delta_0)
@@ -380,124 +237,56 @@ $g,r\geq2$ and $0<\epsilon<c$,
  \leq C\frac{g}{\epsilon}.
  \label{eq:gap}
 \end{equation}
-For $b$-bit parameters and $M$ calls, the same architecture family gives a gap
-$\Theta(\min\{M,b\})$.
-The end-to-end lower bound and trace upper bound can be witnessed on one common prompt
-distribution.
+For $b$-bit parameters and $M$ calls, the same architecture family gives a gap $\Theta(\min\{M,b\})$. The end-to-end lower bound and trace upper bound can be witnessed on one common prompt distribution.
 \end{theorem}
 
 \begin{proof}
-The end-to-end class contains every binary function on the $gr$ prompts, so its VC dimension is
-exactly $gr$. The fixed-confidence realizable rate is $\Theta(gr/\epsilon)$
-\citep{hanneke2016optimal}.
+The end-to-end class contains every binary function on the $gr$ prompts, so its VC dimension is exactly $gr$. The fixed-confidence realizable rate is $\Theta(gr/\epsilon)$ \citep{hanneke2016optimal}.
 
-For traces, one example from group $j$ reveals all of $y_j$. Memorize every observed group tape
-and default on unseen groups. If group $j$ has marginal probability $p_j$, this predictor's risk is
-at most the missing mass $U=\sum_jp_j\1\{j\text{ unseen}\}$. Since
-\[
- \E U=\sum_jp_j(1-p_j)^n\leq \frac{g}{e n},
-\]
-Markov's inequality gives the upper bound at fixed confidence. For the lower bound, restrict to
-tapes whose $r$ bits are all equal. The trace problem then contains arbitrary binary labels on $g$
-groups, whose realizable sample complexity is $\Omega(g/\epsilon)$. The finite-precision claim
-uses $r=\min\{M-1,b-1\}$ as in Theorem~\ref{thm:precision}.
+For traces, one example from group $j$ reveals all of $y_j$. Memorize every observed group tape and default on unseen groups. If group $j$ has marginal probability $p_j$, this predictor's risk is at most the missing mass $U=\sum_jp_j\1\{j\text{ unseen}\}$. Since \[ \E U=\sum_jp_j(1-p_j)^n\leq \frac{g}{e n}, \] Markov's inequality gives the upper bound at fixed confidence. For the lower bound, restrict to tapes whose $r$ bits are all equal. The trace problem then contains arbitrary binary labels on $g$ groups, whose realizable sample complexity is $\Omega(g/\epsilon)$. The finite-precision claim uses $r=\min\{M-1,b-1\}$ as in Theorem~\ref{thm:precision}.
 
-For the common-distribution statement, take a standard rare-points distribution witnessing the
-$gr$-point end-to-end lower bound. The trace learner's upper bound holds for every distribution,
-including this one.
+For the common-distribution statement, take a standard rare-points distribution witnessing the $gr$-point end-to-end lower bound. The trace learner's upper bound holds for every distribution, including this one.
 \end{proof}
 
-The separation complements the horizon-free full-trace theory
-\citep{joshi2025theory,hanneke2026sample,li2026optimal,yang2026tight}. Those works show that a
-learner can often exploit a repeated local rule without paying for trace length. Theorem~\ref{thm:gap}
-exhibits the matching architectural obstruction when that trace is latent.
+The separation complements the horizon-free full-trace theory \citep{joshi2025theory,hanneke2026sample,li2026optimal,yang2026tight}. Those works show that a learner can often exploit a repeated local rule without paying for trace length. Theorem~\ref{thm:gap} exhibits the matching architectural obstruction when that trace is latent.
 
 \section{From hard attention to softmax}
 
-Hard attention makes the exact circuit transparent, but the lower bound does not require a
-discontinuous deployment model.
+Hard attention makes the exact circuit transparent, but the lower bound does not require a discontinuous deployment model.
 
 \begin{theorem}[Softmax compilation]\label{thm:softmax}
-For every fixed $g,r$, there is a three-block causal softmax Transformer with the same asymptotic
-parameter count, vocabulary, and prompt length as Theorem~\ref{thm:lower} that realizes the same
-$gr$ final labels for every tape assignment. Hence Corollary~\ref{cor:sharp} also holds as a lower
-bound for ordinary softmax attention.
+For every fixed $g,r$, there is a three-block causal softmax Transformer with the same asymptotic parameter count, vocabulary, and prompt length as Theorem~\ref{thm:lower} that realizes the same $gr$ final labels for every tape assignment. Hence Corollary~\ref{cor:sharp} also holds as a lower bound for ordinary softmax attention.
 \end{theorem}
 
 \begin{proof}[Proof idea]
-Every selector and address head has a positive score gap. The prefix head has tied maximizers and
-softmax converges to their uniform average. The comparison head has gap at least $2^{-(r+1)}$.
-On the finite set of relevant prefixes and tape assignments, scaled softmax therefore converges
-uniformly to every hard-attention output. Choose the scale so all errors remain below one quarter
-of the comparison and output margins. Induction over the $r+1$ discrete argmax outputs preserves
-the whole rollout. Appendix~\ref{app:softmax} makes the induction quantitative. Selector scales
-$O(r+\log T_{\rm ctx})$ and comparison scale $2^{O(r)}\operatorname{polylog}(T_{\rm ctx})$
-suffice.
+Every selector and address head has a positive score gap. The prefix head has tied maximizers and softmax converges to their uniform average. The comparison head has gap at least $2^{-(r+1)}$. On the finite set of relevant prefixes and tape assignments, scaled softmax therefore converges uniformly to every hard-attention output. Choose the scale so all errors remain below one quarter of the comparison and output margins. Induction over the $r+1$ discrete argmax outputs preserves the whole rollout. Appendix~\ref{app:softmax} makes the induction quantitative. Selector scales $O(r+\log T_{\rm ctx})$ and comparison scale $2^{O(r)}\operatorname{polylog}(T_{\rm ctx})$ suffice.
 \end{proof}
 
-The softmax coefficient is large because the tape margin is small. Its binary description has
-$O(r+\log T_{\rm ctx})$ bits, consistent with the precision frontier rather than an escape from it.
+The softmax coefficient is large because the tape margin is small. Its binary description has $O(r+\log T_{\rm ctx})$ bits, consistent with the precision frontier rather than an escape from it.
 
 \section{Related work and discussion}
 
 \paragraph{Autoregressive sample complexity.}
-\citet{joshi2025theory} introduced the time-invariant PAC model and proved the generic linear
-end-to-end upper bound, along with horizon-light trace guarantees. \citet{hanneke2026sample}
-show that arbitrary base classes realize essentially every natural end-to-end growth rate between
-constant and linear. Their linear witness is an abstract prefix class, not a Transformer
-construction. \citet{li2026optimal} prove that exact-trace learning has the optimal local multiclass
-rate under very general stopping rules. \citet{altabaa2025cot} give distribution-dependent bounds
-through CoT information. Our result identifies the worst-case rate for a fixed, constant-depth
-Transformer architecture and gives an exact same-subclass separation.
+\citet{joshi2025theory} introduced the time-invariant PAC model and proved the generic linear end-to-end upper bound, along with horizon-light trace guarantees. \citet{hanneke2026sample} show that arbitrary base classes realize essentially every natural end-to-end growth rate between constant and linear. Their linear witness is an abstract prefix class, not a Transformer construction. \citet{li2026optimal} prove that exact-trace learning has the optimal local multiclass rate under very general stopping rules. \citet{altabaa2025cot} give distribution-dependent bounds through CoT information. Our result identifies the worst-case rate for a fixed, constant-depth Transformer architecture and gives an exact same-subclass separation.
 
 \paragraph{Transformer capacity.}
-\citet{yang2026tight} establish the nearly tight $\widetilde\Theta(WL)$ one-pass VC dimension and
-the corresponding full-trace Transformer rate. Their scratchpad lower bound keeps intermediate
-tokens label independent to show that teacher forcing is minimax optimal. They explicitly leave
-end-to-end learning without traces open. Our tape has the opposite purpose. Its parameter-dependent
-intermediate tokens expose a new label bit at each hidden call. \citet{madden2025next} characterize
-interpolation of arbitrary next-token distributions on fixed contexts with parameters linear in the
-number of contexts. We study final tokens after parameter-dependent contexts have been generated.
+\citet{yang2026tight} establish the nearly tight $\widetilde\Theta(WL)$ one-pass VC dimension and the corresponding full-trace Transformer rate. Their scratchpad lower bound keeps intermediate tokens label independent to show that teacher forcing is minimax optimal. They explicitly leave end-to-end learning without traces open. Our tape has the opposite purpose. Its parameter-dependent intermediate tokens expose a new label bit at each hidden call. \citet{madden2025next} characterize interpolation of arbitrary next-token distributions on fixed contexts with parameters linear in the number of contexts. We study final tokens after parameter-dependent contexts have been generated.
 
 \paragraph{Memorization and precision.}
-\citet{yu2025memorization} characterize which finite languages fixed-precision autoregressive
-Transformers can memorize. They prove worst-case parameter lower bounds of order
-$N\log K/b$ and essentially linear constructions when precision, vocabulary, and sentence length
-are fixed. They do not vary hidden rollout length inside the VC dimension of one fixed architecture
-or compare final-answer with full-trace learning. Our $W\min\{M,b\}$ frontier makes the counting
-obstruction attainable along the rollout axis for a structured family. It also explains why their
-constant-precision regime cannot gain an unbounded memorization factor from CoT.
+\citet{yu2025memorization} characterize which finite languages fixed-precision autoregressive Transformers can memorize. They prove worst-case parameter lower bounds of order $N\log K/b$ and essentially linear constructions when precision, vocabulary, and sentence length are fixed. They do not vary hidden rollout length inside the VC dimension of one fixed architecture or compare final-answer with full-trace learning. Our $W\min\{M,b\}$ frontier makes the counting obstruction attainable along the rollout axis for a structured family. It also explains why their constant-precision regime cannot gain an unbounded memorization factor from CoT.
 
 \paragraph{Computational expressiveness and trainability.}
-CoT changes the circuit classes representable by shallow Transformers
-\citep{merrill2023expressive,li2024serial}, while hard-attention lower bounds delimit how many
-steps some computations require \citep{bavandpour2025lower}. Training analyses show striking
-advantages from intermediate parity labels \citep{kim2025parity}. These are computational or
-optimization statements. Our result is information-theoretic and concerns how many prompt labels
-one parameterized rollout class can select.
+CoT changes the circuit classes representable by shallow Transformers \citep{merrill2023expressive,li2024serial}, while hard-attention lower bounds delimit how many steps some computations require \citep{bavandpour2025lower}. Training analyses show striking advantages from intermediate parity labels \citep{kim2025parity}. These are computational or optimization statements. Our result is information-theoretic and concerns how many prompt labels one parameterized rollout class can select.
 
 \paragraph{Limitations.}
-The result is worst case and realizable. Its tape is deliberately a memory device, and its smallest
-hard-attention margin is exponentially small. The precision theorem makes that cost explicit. The
-softmax compilation preserves representation but does not imply that gradient descent will find the
-tape. Arbitrary fixed positional features are allowed by the analyzed Transformer model. Replacing
-them by a prescribed sinusoidal or rotary family is open. The upper bound is sharp for constant
-depth, while the optimal joint dependence on variable $L$ remains open.
+The result is worst case and realizable. Its tape is deliberately a memory device, and its smallest hard-attention margin is exponentially small. The precision theorem makes that cost explicit. The softmax compilation preserves representation but does not imply that gradient descent will find the tape. Arbitrary fixed positional features are allowed by the analyzed Transformer model. Replacing them by a prescribed sinusoidal or rotary family is open. The upper bound is sharp for constant depth, while the optimal joint dependence on variable $L$ remains open.
 
 \section{Conclusion}
 
-A hidden autoregressive transcript is not only extra computation. Under final-answer supervision,
-it can act as an address sequence that repeatedly exposes information stored in shared parameters.
-For constant-depth Transformers this multiplies final-token VC dimension by the rollout length,
-up to logarithms. With $b$ trainable bits per scalar, the multiplier stops at $b$. Observing the
-trace removes the same factor on an explicit fixed subclass. Thus rollout length, trace visibility,
-and trainable precision form one statistical capacity frontier.
+A hidden autoregressive transcript is not only extra computation. Under final-answer supervision, it can act as an address sequence that repeatedly exposes information stored in shared parameters. For constant-depth Transformers this multiplies final-token VC dimension by the rollout length, up to logarithms. With $b$ trainable bits per scalar, the multiplier stops at $b$. Observing the trace removes the same factor on an explicit fixed subclass. Thus rollout length, trace visibility, and trainable precision form one statistical capacity frontier.
 
 \paragraph{Reproducibility statement.}
-Appendices~\ref{app:construction}--\ref{app:audit} give the complete construction and proofs. The
-supplement includes exact rational enumeration of all tapes through length 14, all comparison-head
-competitions, exact-address retrieval, the constant-alphabet hat lookup, and softmax rollout enumeration
-through length 12.
+Appendices~\ref{app:construction}--\ref{app:audit} give the complete construction and proofs. The supplement includes exact rational enumeration of all tapes through length 14, all comparison-head competitions, exact-address retrieval, the constant-alphabet hat lookup, and softmax rollout enumeration through length 12.
 
 \bibliography{references}
 \bibliographystyle{iclr2027_conference}
