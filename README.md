@@ -27,5 +27,6 @@ transformers, chain-of-thought, statistical capacity, sample complexity, autoreg
 
 ## Files
 
+- `main_2026-08-12.pdf`, the paper as first published, with its OpenTimestamps proof `main_2026-08-12.pdf.ots`.
 - source: `appendix.tex`, `iclr2027_conference.bst`, `iclr2027_conference.sty`, `main_2026-08-12.tex`, `references.bib`.
-- also: `main_2026-08-12.bbl`, `main_2026-08-12.pdf`.
+- also: `main_2026-08-12.bbl`.
